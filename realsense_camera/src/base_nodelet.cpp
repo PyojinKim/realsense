@@ -138,6 +138,7 @@ namespace realsense_camera
     pnh_.param("mode", mode_, DEFAULT_MODE);
     pnh_.param("enable_depth", enable_[RS_STREAM_DEPTH], ENABLE_DEPTH);
     pnh_.param("enable_color", enable_[RS_STREAM_COLOR], ENABLE_COLOR);
+    pnh_.param("enable_depth_aligned", enable_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)], ENABLE_DEPTH_ALIGNED);
     pnh_.param("enable_ir", enable_[RS_STREAM_INFRARED], ENABLE_IR);
     pnh_.param("enable_pointcloud", enable_pointcloud_, ENABLE_PC);
     pnh_.param("enable_tf", enable_tf_, ENABLE_TF);
@@ -150,9 +151,11 @@ namespace realsense_camera
     pnh_.param("base_frame_id", base_frame_id_, DEFAULT_BASE_FRAME_ID);
     pnh_.param("depth_frame_id", frame_id_[RS_STREAM_DEPTH], DEFAULT_DEPTH_FRAME_ID);
     pnh_.param("color_frame_id", frame_id_[RS_STREAM_COLOR], DEFAULT_COLOR_FRAME_ID);
+    pnh_.param("depth_aligned_frame_id", frame_id_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)], DEFAULT_DEPTH_ALIGNED_FRAME_ID);
     pnh_.param("ir_frame_id", frame_id_[RS_STREAM_INFRARED], DEFAULT_IR_FRAME_ID);
     pnh_.param("depth_optical_frame_id", optical_frame_id_[RS_STREAM_DEPTH], DEFAULT_DEPTH_OPTICAL_FRAME_ID);
     pnh_.param("color_optical_frame_id", optical_frame_id_[RS_STREAM_COLOR], DEFAULT_COLOR_OPTICAL_FRAME_ID);
+    pnh_.param("depth_aligned_optical_frame_id", optical_frame_id_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)], DEFAULT_DEPTH_ALIGNED_OPTICAL_FRAME_ID);
     pnh_.param("ir_optical_frame_id", optical_frame_id_[RS_STREAM_INFRARED], DEFAULT_IR_OPTICAL_FRAME_ID);
   }
 
@@ -312,6 +315,10 @@ namespace realsense_camera
     image_transport::ImageTransport depth_image_transport(depth_nh);
     camera_publisher_[RS_STREAM_DEPTH] = depth_image_transport.advertiseCamera(DEPTH_TOPIC, 1);
     pointcloud_publisher_ = depth_nh.advertise<sensor_msgs::PointCloud2>(PC_TOPIC, 1);
+
+    ros::NodeHandle depth_aligned_nh(nh_, DEPTH_ALIGNED_NAMESPACE);
+    image_transport::ImageTransport depth_aligned_image_transport(depth_aligned_nh);
+    camera_publisher_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)] = depth_aligned_image_transport.advertiseCamera(DEPTH_ALIGNED_TOPIC, 1);
 
     ros::NodeHandle ir_nh(nh_, IR_NAMESPACE);
     image_transport::ImageTransport ir_image_transport(ir_nh);
@@ -559,6 +566,19 @@ namespace realsense_camera
       disableStream(RS_STREAM_DEPTH);
     }
 
+    if (enable_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)])
+    {
+      if (camera_info_ptr_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)] == NULL)
+      {
+        ROS_DEBUG_STREAM(nodelet_name_ << " - Allocating resources for " << STREAM_DESC[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)]);
+        getStreamCalibData(RS_STREAM_DEPTH_ALIGNED_TO_COLOR);
+        step_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)] = camera_info_ptr_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)]->width * unit_step_size_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)];
+        image_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)] = cv::Mat(camera_info_ptr_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)]->height,
+            camera_info_ptr_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)]->width, cv_type_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)], cv::Scalar(0, 0, 0));
+      }
+      ts_[ros_index(RS_STREAM_DEPTH_ALIGNED_TO_COLOR)] = -1;
+    }
+
     if (enable_[RS_STREAM_INFRARED] == true)
     {
       enableStream(RS_STREAM_INFRARED, width_[RS_STREAM_DEPTH], height_[RS_STREAM_DEPTH], format_[RS_STREAM_INFRARED],
@@ -615,9 +635,9 @@ namespace realsense_camera
     checkError();
 
     sensor_msgs::CameraInfo * camera_info = new sensor_msgs::CameraInfo();
-    camera_info_ptr_[stream_index] = sensor_msgs::CameraInfoPtr (camera_info);
+    camera_info_ptr_[ros_index(stream_index)] = sensor_msgs::CameraInfoPtr (camera_info);
 
-    camera_info->header.frame_id = optical_frame_id_[stream_index];
+    camera_info->header.frame_id = optical_frame_id_[ros_index(stream_index)];
     camera_info->width = intrinsic.width;
     camera_info->height = intrinsic.height;
 
@@ -741,6 +761,21 @@ namespace realsense_camera
               static_cast<double>(depth_scale_meters_) / static_cast<double>(MILLIMETER_METERS));
       }
     }
+    else if (stream_index == RS_STREAM_DEPTH_ALIGNED_TO_COLOR)
+    {
+      if (depth_scale_meters_ == MILLIMETER_METERS)
+      {
+        image_[ros_index(stream_index)].data = (unsigned char *) (rs_get_frame_data(rs_device_, stream_index, 0));
+      }
+      else
+      {
+        cvWrapper_ = cv::Mat(image_[ros_index(stream_index)].size(), cv_type_[ros_index(stream_index)],
+              (void *)(rs_get_frame_data(rs_device_, stream_index, 0)),
+              step_[ros_index(stream_index)]);
+        cvWrapper_.convertTo(image_[ros_index(stream_index)], cv_type_[ros_index(stream_index)],
+              static_cast<double>(depth_scale_meters_) / static_cast<double>(MILLIMETER_METERS));
+      }
+    }
     else
     {
       image_[stream_index].data = (unsigned char *) (rs_get_frame_data(rs_device_, stream_index, 0));
@@ -827,6 +862,7 @@ namespace realsense_camera
     publishTopic(RS_STREAM_DEPTH);
     publishTopic(RS_STREAM_COLOR);
     publishTopic(RS_STREAM_INFRARED);
+    publishTopic(RS_STREAM_DEPTH_ALIGNED_TO_COLOR);
   }
 
   /*
@@ -835,27 +871,28 @@ namespace realsense_camera
   void BaseNodelet::publishTopic(rs_stream stream_index)
   {
     // Publish stream only if there is at least one subscriber.
-    if (camera_publisher_[stream_index].getNumSubscribers() > 0 &&
-        rs_is_stream_enabled(rs_device_, (rs_stream) stream_index, 0) == 1)
+    if (camera_publisher_[ros_index(stream_index)].getNumSubscribers() > 0 &&
+        (stream_index == RS_STREAM_DEPTH_ALIGNED_TO_COLOR ||
+         rs_is_stream_enabled(rs_device_, (rs_stream) stream_index, 0) == 1))
     {
       double current_ts = rs_get_frame_timestamp(rs_device_, (rs_stream) stream_index, 0);
-      if (ts_[stream_index] != current_ts) // Publish frames only if its not duplicate
+      if (ts_[ros_index(stream_index)] != current_ts) // Publish frames only if its not duplicate
       {
         getStreamData(stream_index);
 
         sensor_msgs::ImagePtr msg = cv_bridge::CvImage(std_msgs::Header(),
-            encoding_[stream_index],
-            image_[stream_index]).toImageMsg();
+            encoding_[ros_index(stream_index)],
+            image_[ros_index(stream_index)]).toImageMsg();
 
-        msg->header.frame_id = optical_frame_id_[stream_index];
+        msg->header.frame_id = optical_frame_id_[ros_index(stream_index)];
         msg->header.stamp = topic_ts_; // Publish timestamp to synchronize frames.
-        msg->width = image_[stream_index].cols;
-        msg->height = image_[stream_index].rows;
+        msg->width = image_[ros_index(stream_index)].cols;
+        msg->height = image_[ros_index(stream_index)].rows;
         msg->is_bigendian = false;
-        msg->step = step_[stream_index];
+        msg->step = step_[ros_index(stream_index)];
 
-        camera_info_ptr_[stream_index]->header.stamp = msg->header.stamp;
-        camera_publisher_[stream_index].publish (msg, camera_info_ptr_[stream_index]);
+        camera_info_ptr_[ros_index(stream_index)]->header.stamp = msg->header.stamp;
+        camera_publisher_[ros_index(stream_index)].publish (msg, camera_info_ptr_[ros_index(stream_index)]);
       }
       else
       {
@@ -864,7 +901,7 @@ namespace realsense_camera
           duplicate_depth_color_ = true; // Set this flag to true if Depth and/or Color frame is duplicate
         }
       }
-      ts_[stream_index] = current_ts;
+      ts_[ros_index(stream_index)] = current_ts;
     }
   }
 

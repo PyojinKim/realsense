@@ -172,6 +172,15 @@ namespace realsense_camera
     virtual void checkError();
     virtual bool checkForSubscriber();
     virtual void wrappedSystem(std::vector<std::string> string_argv);
+
+    static constexpr rs_stream origin_index(rs_stream index)
+    {
+      return (index == RS_STREAM_POINTS) ? RS_STREAM_DEPTH_ALIGNED_TO_COLOR : index;
+    }
+    static constexpr rs_stream ros_index(rs_stream index)
+    {
+      return (index == RS_STREAM_DEPTH_ALIGNED_TO_COLOR) ? RS_STREAM_POINTS : index;
+    }
   };
 }
 #endif

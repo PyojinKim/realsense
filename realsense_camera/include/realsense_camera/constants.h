@@ -37,7 +37,7 @@
 namespace realsense_camera
 {
     // Default Constants.
-    const int STREAM_COUNT = 5;
+    const int STREAM_COUNT = 6;
     const int DEPTH_WIDTH = 480;
     const int DEPTH_HEIGHT = 360;
     const int COLOR_WIDTH = 640;
@@ -47,11 +47,13 @@ namespace realsense_camera
     const int DEPTH_FPS = 60;
     const int COLOR_FPS = 60;
     const int FISHEYE_FPS = 60;
+    const int DEPTH_ALIGNED_FPS = 60;
     const bool ENABLE_DEPTH = true;
     const bool ENABLE_COLOR = true;
     const bool ENABLE_IR = false;
     const bool ENABLE_IR2 = false;
     const bool ENABLE_FISHEYE = true;
+    const bool ENABLE_DEPTH_ALIGNED = true;
     const bool ENABLE_IMU = true;
     const bool ENABLE_PC = false;
     const bool ENABLE_TF = true;
@@ -59,22 +61,26 @@ namespace realsense_camera
     const std::string DEFAULT_BASE_FRAME_ID = "camera_link";
     const std::string DEFAULT_DEPTH_FRAME_ID = "camera_depth_frame";
     const std::string DEFAULT_COLOR_FRAME_ID = "camera_rgb_frame";
+    const std::string DEFAULT_DEPTH_ALIGNED_FRAME_ID = "camera_rgb_frame";
     const std::string DEFAULT_IR_FRAME_ID = "camera_ir_frame";
     const std::string DEFAULT_DEPTH_OPTICAL_FRAME_ID = "camera_depth_optical_frame";
     const std::string DEFAULT_COLOR_OPTICAL_FRAME_ID = "camera_rgb_optical_frame";
+    const std::string DEFAULT_DEPTH_ALIGNED_OPTICAL_FRAME_ID = "camera_rgb_optical_frame";
     const std::string DEFAULT_IR_OPTICAL_FRAME_ID = "camera_ir_optical_frame";
     const std::string DEPTH_NAMESPACE = "depth";
     const std::string DEPTH_TOPIC = "image_raw";
     const std::string PC_TOPIC = "points";
     const std::string COLOR_NAMESPACE = "color";
     const std::string COLOR_TOPIC = "image_raw";
+    const std::string DEPTH_ALIGNED_NAMESPACE = "depth_aligned";
+    const std::string DEPTH_ALIGNED_TOPIC = "image_raw";
     const std::string IR_NAMESPACE = "ir";
     const std::string IR_TOPIC = "image_raw";
     const std::string SETTINGS_SERVICE = "get_settings";
     const std::string CAMERA_IS_POWERED_SERVICE = "is_powered";
     const std::string CAMERA_SET_POWER_SERVICE = "set_power";
     const std::string CAMERA_FORCE_POWER_SERVICE = "force_power";
-    const std::string STREAM_DESC[STREAM_COUNT] = {"Depth", "Color", "IR", "IR2", "Fisheye"};
+    const std::string STREAM_DESC[STREAM_COUNT] = {"Depth", "Color", "IR", "IR2", "Fisheye", "DepthAligned"};
     const int EVENT_COUNT = 2;
     const double ROTATION_IDENTITY[] = {1, 0, 0, 0, 1, 0, 0, 0, 1};
     const float MILLIMETER_METERS  = 0.001;
